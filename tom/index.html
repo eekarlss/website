@@ -248,7 +248,7 @@
   }
 
   function showOver(m, isBest) {
-    $("ovTitle").textContent = "crashed!";
+    $("ovTitle").textContent = "Crashed!";
     $("ovBody").innerHTML =
       '<p>you made it</p><p class="big">' + m + ' m</p><p>' +
       (isBest ? "new best!" : "best " + best + " m") + "</p>";
@@ -257,11 +257,11 @@
   }
 
   function showTitle() {
-    $("ovTitle").textContent = "long haul";
+    $("ovTitle").textContent = "Thomas truck driver";
     $("ovBody").innerHTML =
-      "<p>dodge the traffic and drive as far as you can</p>" +
-      "<p>tap the left or right side to change lane, or use the arrow keys</p>";
-    $("ovGo").textContent = "tap to start";
+      "<p>Dodge the traffic and drive as far as you can</p>" +
+      "<p>Tap the left or right side to change lane, or use the arrow keys</p>";
+    $("ovGo").textContent = "Tap to start";
     $("overlay").classList.remove("hidden");
   }
 
