@@ -78,6 +78,11 @@
   .gate p { margin: 0; max-width: 40ch; color: var(--dim); font-size: 0.9rem; }
   .gate p.err { color: var(--amber); }
   .gate[hidden] { display: none; }
+  .gate pre.detail {
+    margin: 0; max-width: 62ch; max-height: 9rem; overflow: auto; text-align: left;
+    font: 0.72rem/1.5 var(--mono); color: #e8c27a; white-space: pre-wrap; overflow-wrap: anywhere;
+    border: 1px solid var(--line); border-radius: 6px; padding: 0.5rem 0.6rem; user-select: text; -webkit-user-select: text;
+  }
 
   .holdbar { height: 6px; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; margin-top: 0.6rem; max-width: 760px; overflow: hidden; }
   #holdFill { height: 100%; width: 0; background: var(--accent); }
@@ -131,6 +136,7 @@
           <h2>play with your hand</h2>
           <p id="gateMsg">Your camera finds your hand and reads rock, paper or scissors. The video stays in your browser and is never uploaded.</p>
           <button class="primary" id="startCam" type="button">start camera</button>
+          <pre class="detail" id="gateDetail" hidden></pre>
           <button class="ghost" id="noCam" type="button">play with buttons instead</button>
         </div>
       </div>
@@ -194,7 +200,11 @@
 
 <script>
   // ---------- config ----------
-  const MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32";
+  const MP_SOURCES = [
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32",
+    "https://unpkg.com/@mediapipe/tasks-vision@0.10.32",
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21",
+  ];
   const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
   const BEAT_MS = 700;        // length of "rock", "paper", "scissors"
   const SKIP_MS = 150;        // ignore the first moments after "shoot!" (hand still moving)
@@ -440,20 +450,59 @@
     }
   }
 
-  async function createLandmarker(vision, fileset) {
+  let importModule = (url) => import(url);
+  const errText = (e) => String((e && (e.message || e.name)) || e);
+  function showDetail(t) { const el = $("gateDetail"); el.textContent = t; el.hidden = !t; }
+
+  async function downloadModel() {
+    let res;
+    try { res = await fetch(MODEL_URL); }
+    catch (e) { throw new Error("model download failed (" + errText(e) + ")"); }
+    if (!res.ok) throw new Error("model download failed (HTTP " + res.status + ")");
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
+  async function createLandmarker(vision, fileset, model) {
     const make = (delegate) => vision.HandLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: MODEL_URL, delegate },
+      baseOptions: { modelAssetBuffer: model.slice(), delegate },
       runningMode: "VIDEO",
       numHands: 1,
       minHandDetectionConfidence: 0.5,
       minHandPresenceConfidence: 0.5,
       minTrackingConfidence: 0.5,
     });
-    try { return await make("GPU"); } catch (e) { return await make("CPU"); }
+    try { return await make("GPU"); }
+    catch (gpuErr) {
+      try { return await make("CPU"); }
+      catch (cpuErr) { throw new Error("tracker start failed (GPU: " + errText(gpuErr) + "; CPU: " + errText(cpuErr) + ")"); }
+    }
+  }
+
+  // Downloads the model once, then tries each library source until one works.
+  async function loadTracker() {
+    const model = await downloadModel();
+    gateMessage("Starting the hand tracker…");
+    const problems = [];
+    for (const base of MP_SOURCES) {
+      const host = base.split("/")[2] + base.slice(base.lastIndexOf("@"));
+      let step = "script";
+      try {
+        const vision = await importModule(base + "/vision_bundle.mjs");
+        step = "runtime";
+        const fileset = await vision.FilesetResolver.forVisionTasks(base + "/wasm");
+        step = "start";
+        return await createLandmarker(vision, fileset, model);
+      } catch (e) {
+        console.error("[rps] " + host + " " + step, e);
+        problems.push(host + " (" + step + "): " + errText(e));
+      }
+    }
+    throw new Error(problems.join("\n"));
   }
 
   async function startCamera() {
     $("startCam").disabled = true;
+    showDetail("");
     gateMessage("Starting camera…");
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("nomedia");
@@ -470,14 +519,13 @@
     overlay.height = video.videoHeight || 480;
     $("stage").style.aspectRatio = overlay.width + " / " + overlay.height;
 
-    gateMessage("Loading the hand tracker (about 8 MB the first time)…");
     try {
-      const vision = await import(MP_BASE + "/vision_bundle.mjs");
-      const fileset = await vision.FilesetResolver.forVisionTasks(MP_BASE + "/wasm");
-      landmarker = await createLandmarker(vision, fileset);
+      gateMessage("Downloading the hand model (about 8 MB the first time)…");
+      landmarker = await loadTracker();
     } catch (e) {
       stopCamera();
-      gateMessage("Couldn’t load the hand tracker (check your connection). You can still play with the buttons.", true);
+      gateMessage("Couldn’t load the hand tracker. You can still play with the buttons.", true);
+      showDetail(errText(e));
       return;
     }
     cameraOn = true;
