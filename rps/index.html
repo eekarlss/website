@@ -192,7 +192,7 @@
 
       <section class="card" id="dbgCard" hidden>
         <h2>debug</h2>
-        <pre class="dbg" id="dbg">no hand</pre>
+        <pre class="dbg" id="dbgOut">no hand</pre>
       </section>
     </div>
   </div>
@@ -423,7 +423,7 @@
       const now = performance.now();
       frames++;
       if (now - fpsAt > 1000) { fps = frames; frames = 0; fpsAt = now; }
-      $("dbg").textContent = world
+      $("dbgOut").textContent = world
         ? Object.entries(cls.ratios).map(([k, v]) => k.padEnd(7) + v.toFixed(2) + (v > EXT_RATIO ? "  up" : "  curled")).join("\n") +
           "\n\ngesture " + (cls.gesture || "none") + "\nthreshold " + EXT_RATIO + "\nfps " + fps
         : "no hand\nfps " + fps;
