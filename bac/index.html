@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>BAC calculator</title>
+<style>
+  :root {
+    --bg: #0a1210;
+    --panel: #101e1a;
+    --panel2: #0c1815;
+    --line: #21403a;
+    --ink: #dcf5e8;
+    --dim: #86a99a;
+    --accent: #3dff7a;
+    --amber: #ffb02e;
+    --red: #ff5252;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  h1 { font-family: var(--mono); font-size: clamp(1.6rem, 4vw, 2.2rem); margin: 0 0 1.25rem; font-weight: 700; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--dim); max-width: 62ch; margin: 0 0 1.25rem; }
+
+  .layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 900px) { .layout { grid-template-columns: 360px minmax(0, 1fr); align-items: start; } }
+  .col { display: grid; gap: 1rem; min-width: 0; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.1rem; }
+  .card h2 { margin: 0 0 0.8rem; font: 600 0.95rem var(--mono); color: var(--accent); }
+
+  label, .lbl { display: block; font-size: 0.85rem; color: var(--dim); margin-bottom: 0.3rem; }
+  input[type="number"], input[type="datetime-local"], input[type="text"], select {
+    width: 100%;
+    background: var(--panel2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.5rem 0.6rem;
+    font: inherit;
+    color-scheme: dark;
+  }
+  input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem; }
+  .field { margin-bottom: 0.75rem; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg label { margin: 0; text-align: center; padding: 0.5rem; cursor: pointer; color: var(--dim); background: var(--panel2); }
+  .seg input:checked + label { background: var(--accent); color: #04140a; font-weight: 600; }
+  .seg input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: -2px; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .rangeval { font-family: var(--mono); color: var(--ink); }
+  .hint { font-size: 0.8rem; color: var(--dim); margin: 0.25rem 0 0; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.9rem; }
+  button {
+    font: inherit;
+    cursor: pointer;
+    color: var(--ink);
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.4rem 0.65rem;
+  }
+  button:hover { border-color: var(--accent); }
+  .chip { font-size: 0.85rem; }
+  .chip small { color: var(--dim); }
+  button.primary { background: var(--accent); color: #04140a; border-color: var(--accent); font-weight: 600; }
+  button.ghost { color: var(--dim); }
+  .custom { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.5rem; align-items: end; margin-bottom: 0.9rem; }
+  .custom label { margin-bottom: 0.2rem; }
+
+  #drinkList { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+  #drinkList li { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 0.55rem 0.65rem; display: grid; grid-template-columns: 1fr auto; gap: 0.35rem 0.5rem; align-items: center; }
+  #drinkList .nm { font-size: 0.92rem; overflow-wrap: anywhere; }
+  #drinkList .nm small { color: var(--dim); display: block; }
+  #drinkList input[type="datetime-local"] { grid-column: 1 / 2; padding: 0.35rem 0.5rem; font-size: 0.9rem; }
+  #drinkList .rm { grid-row: 1 / 2; grid-column: 2 / 3; padding: 0.15rem 0.55rem; color: var(--dim); }
+  .empty { color: var(--dim); font-size: 0.9rem; margin: 0; }
+  .listtools { display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0.8rem 0.9rem; }
+  .stat .k { font-size: 0.8rem; color: var(--dim); }
+  .stat .v { font: 700 1.6rem/1.2 var(--mono); margin: 0.1rem 0; }
+  .stat .s { font-size: 0.8rem; color: var(--dim); }
+  .ok { color: var(--accent); } .mid { color: var(--amber); } .bad { color: var(--red); }
+
+  .banner { border: 1px solid var(--line); border-left-width: 5px; border-radius: 8px; padding: 0.7rem 0.9rem; background: var(--panel); }
+  .banner b { font-family: var(--mono); }
+  .banner.ok { border-left-color: var(--accent); color: var(--ink); }
+  .banner.mid { border-left-color: var(--amber); color: var(--ink); }
+  .banner.bad { border-left-color: var(--red); color: var(--ink); }
+  .alert { border: 1px solid var(--red); background: rgba(255, 82, 82, 0.1); border-radius: 8px; padding: 0.7rem 0.9rem; }
+  [hidden] { display: none !important; }
+
+  .chartcard { padding-bottom: 0.7rem; }
+  #chart { display: block; width: 100%; height: 320px; touch-action: pan-y; }
+  @media (max-width: 600px) { #chart { height: 260px; } }
+  .legend { font-size: 0.8rem; color: var(--dim); margin: 0.4rem 0 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  td { padding: 0.45rem 0.4rem; border-top: 1px solid var(--line); vertical-align: top; }
+  td:first-child { font-family: var(--mono); white-space: nowrap; padding-right: 0.8rem; }
+  tr.on td { background: rgba(61, 255, 122, 0.08); }
+  tr.on td:first-child { color: var(--accent); }
+
+  .note { font-size: 0.85rem; color: var(--dim); }
+  .note b { color: var(--ink); }
+  details { color: var(--dim); font-size: 0.9rem; }
+  details summary { cursor: pointer; color: var(--ink); }
+  details p { margin: 0.5rem 0 0; }
+  code { font-family: var(--mono); color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>bac<span>.</span>calculator</h1>
+
+  <div class="layout">
+    <div class="col">
+      <section class="card" aria-labelledby="h-you">
+        <h2 id="h-you">you</h2>
+        <div class="row">
+          <div>
+            <label for="weight">weight (kg)</label>
+            <input id="weight" type="number" inputmode="decimal" min="30" max="300" step="0.5" value="75">
+          </div>
+          <div>
+            <span class="lbl" id="sexlbl">body type</span>
+            <div class="seg" role="radiogroup" aria-labelledby="sexlbl">
+              <input type="radio" name="sex" id="sexM" value="male" checked><label for="sexM">male</label>
+              <input type="radio" name="sex" id="sexF" value="female"><label for="sexF">female</label>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="stomach">food in your stomach</label>
+          <select id="stomach">
+            <option value="empty">empty stomach (absorbs fast)</option>
+            <option value="light" selected>light meal or snack</option>
+            <option value="full">full meal (absorbs slowly)</option>
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label for="beta">burn-off rate: <span class="rangeval" id="betaVal">0.15</span> ‰ per hour</label>
+          <input id="beta" type="range" min="0.10" max="0.25" step="0.01" value="0.15">
+          <p class="hint">Typical is 0.10 to 0.20. It varies a lot between people.</p>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-drinks">
+        <h2 id="h-drinks">drinks</h2>
+        <div class="chips" id="presets"></div>
+        <div class="custom">
+          <div><label for="cVol">size (cl)</label><input id="cVol" type="number" inputmode="decimal" min="1" max="200" step="0.5" value="33"></div>
+          <div><label for="cAbv">strength (%)</label><input id="cAbv" type="number" inputmode="decimal" min="0.5" max="96" step="0.1" value="5"></div>
+          <button id="cAdd" class="primary" type="button">add</button>
+        </div>
+        <ul id="drinkList"></ul>
+        <p class="empty" id="noDrinks">Tap a drink above to add it at the current time. You can change each drink's time afterwards.</p>
+        <div class="listtools" id="listtools" hidden>
+          <span class="note" id="totals"></span>
+          <button class="ghost" id="clearAll" type="button">clear all</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="col">
+      <div class="alert" id="danger" role="alert" hidden></div>
+      <div class="banner ok" id="banner">Add a drink to see your estimated curve.</div>
+
+      <div class="stats" id="stats">
+        <div class="stat"><div class="k">right now</div><div class="v" id="sNow">–</div><div class="s" id="sNowSub">&nbsp;</div></div>
+        <div class="stat"><div class="k">peak</div><div class="v" id="sPeak">–</div><div class="s" id="sPeakSub">&nbsp;</div></div>
+        <div class="stat"><div class="k">back to 0.0 ‰</div><div class="v" id="sSober">–</div><div class="s" id="sSoberSub">&nbsp;</div></div>
+        <div class="stat"><div class="k">alcohol</div><div class="v" id="sGrams">–</div><div class="s" id="sGramsSub">&nbsp;</div></div>
+      </div>
+
+      <section class="card chartcard" aria-label="Estimated blood alcohol over time">
+        <canvas id="chart" role="img" aria-label="Line chart of estimated blood alcohol content over time"></canvas>
+        <p class="legend">▲ marks when each drink was taken. Hover or touch the chart to read a value at any time.</p>
+      </section>
+
+      <section class="card">
+        <h2>what the levels usually feel like</h2>
+        <table id="levels"></table>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------- model constants ----------
+  const DENSITY = 0.789;          // g of ethanol per ml
+  const ANNOS_G = 12;             // grams of alcohol in one Finnish standard drink
+  const KCAL_PER_G = 7.1;
+  const LIMIT = 0.5, AGGRAVATED = 1.2;   // Finnish limits in per mille
+  const BREATH_PER_MILLE = 0.44;         // mg/l breath per ‰ (0.22 mg/l ~ 0.5 ‰)
+  const R_FACTOR = { male: 0.68, female: 0.55 };
+  const ABSORPTION = { empty: 6, light: 3, full: 1.5 };   // first-order rate per hour
+  const MIN = 60000, HOUR = 3600000;
+
+  const PRESETS = [
+    { name: "Beer", cl: 33, abv: 4.7 },
+    { name: "Strong beer", cl: 50, abv: 5.5 },
+    { name: "Long drink", cl: 33, abv: 5.5 },
+    { name: "Cider", cl: 33, abv: 4.5 },
+    { name: "Wine", cl: 12, abv: 13 },
+    { name: "Shot", cl: 4, abv: 40 },
+  ];
+  const LEVELS = [
+    { max: 0.2, range: "0.0 – 0.2", name: "barely any effect", desc: "Mostly unnoticeable, though attention already starts to slip around 0.2 ‰." },
+    { max: 0.5, range: "0.2 – 0.5", name: "relaxed", desc: "Relaxed and talkative, with slower reactions and weaker attention." },
+    { max: 1.0, range: "0.5 – 1.0", name: "impaired", desc: "Poorer coordination and judgement. Over the Finnish driving limit." },
+    { max: 2.0, range: "1.0 – 2.0", name: "drunk", desc: "Slurred speech, poor balance and memory gaps. Aggravated drunk driving starts at 1.2 ‰." },
+    { max: 3.0, range: "2.0 – 3.0", name: "severely drunk", desc: "Severe impairment. Vomiting and blackouts are likely. Dangerous." },
+    { max: Infinity, range: "3.0 +", name: "danger zone", desc: "Life-threatening: risk of passing out and slowed breathing. Call 112." },
+  ];
+
+  // ---------- state ----------
+  const $ = (id) => document.getElementById(id);
+  const pad = (n) => String(n).padStart(2, "0");
+  const drinks = [];
+  let nextId = 1;
+  let sim = null;
+  let hoverX = null;
+
+  // ---------- helpers ----------
+  const grams = (d) => d.cl * 10 * d.abv / 100 * DENSITY;
+  const roundMin = (ms) => Math.floor(ms / MIN) * MIN;
+  const toInput = (ms) => {
+    const d = new Date(ms);
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  };
+  const clock = (ms) => { const d = new Date(ms); return pad(d.getHours()) + ":" + pad(d.getMinutes()); };
+  const dayKey = (ms) => { const d = new Date(ms); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+  function when(ms) {
+    const dn = Math.round((new Date(new Date(ms).setHours(0, 0, 0, 0)) - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000);
+    if (dn === 0) return clock(ms);
+    if (dn === 1) return clock(ms) + " tomorrow";
+    if (dn === -1) return clock(ms) + " yesterday";
+    return new Date(ms).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) + " " + clock(ms);
+  }
+  function dur(ms) {
+    const m = Math.max(0, Math.round(ms / MIN));
+    const h = Math.floor(m / 60);
+    return h ? h + " h " + pad(m % 60) + " min" : m + " min";
+  }
+  const fmt = (c) => c.toFixed(2);
+  const levelFor = (c) => LEVELS.find((l) => c < l.max);
+  const tone = (c) => (c >= AGGRAVATED ? "bad" : c >= LIMIT ? "mid" : "ok");
+  const cssColor = { ok: "#3dff7a", mid: "#ffb02e", bad: "#ff5252" };
+
+  // ---------- simulation ----------
+  function simulate(list, weight, r, ka, beta) {
+    if (!list.length) return null;
+    const sorted = list.map((d) => ({ t: d.time, g: grams(d) })).sort((a, b) => a.t - b.t);
+    const t0 = sorted[0].t - 15 * MIN;
+    const lastDrink = sorted[sorted.length - 1].t;
+    const dtH = MIN / HOUR;
+    const pts = [];
+    let gut = 0, c = 0, i = 0;
+    for (let t = t0; t <= t0 + 72 * HOUR; t += MIN) {
+      while (i < sorted.length && sorted[i].t <= t) { gut += sorted[i].g; i++; }
+      const absorbed = gut * (1 - Math.exp(-ka * dtH));
+      gut -= absorbed;
+      c = Math.max(0, c + absorbed / (r * weight) - beta * dtH);
+      pts.push({ t, c });
+      if (t > lastDrink + 30 * MIN && c <= 0.0005 && gut < 0.01) break;
+    }
+    return pts;
+  }
+
+  function analyse(pts, now) {
+    let peak = pts[0];
+    for (const p of pts) if (p.c > peak.c) peak = p;
+    let soberAt = null;
+    if (peak.c > 0.005) {
+      for (let i = pts.length - 1; i >= 0; i--) {
+        if (pts[i].c > 0.005) { soberAt = pts[Math.min(i + 1, pts.length - 1)].t; break; }
+      }
+    }
+    let cur = 0, started = now >= pts[0].t;
+    if (started && now <= pts[pts.length - 1].t) cur = pts[Math.min(pts.length - 1, Math.floor((now - pts[0].t) / MIN))].c;
+    return { peak, soberAt, cur, started };
+  }
+
+  // ---------- reading inputs ----------
+  function profile() {
+    const weight = parseFloat($("weight").value);
+    const sex = document.querySelector('input[name="sex"]:checked').value;
+    return {
+      weight,
+      r: R_FACTOR[sex],
+      ka: ABSORPTION[$("stomach").value],
+      beta: parseFloat($("beta").value),
+      valid: weight >= 30 && weight <= 300,
+    };
+  }
+
+  // ---------- recalc + DOM ----------
+  function recalc() {
+    const p = profile();
+    $("betaVal").textContent = p.beta.toFixed(2);
+    const totalG = drinks.reduce((s, d) => s + grams(d), 0);
+    $("totals").textContent = drinks.length + (drinks.length === 1 ? " drink · " : " drinks · ") + (totalG / ANNOS_G).toFixed(1) + " standard";
+
+    if (!drinks.length || !p.valid) {
+      sim = null;
+      renderEmpty(p.valid);
+      drawChart();
+      return;
+    }
+    const pts = simulate(drinks, p.weight, p.r, p.ka, p.beta);
+    const now = Date.now();
+    const a = analyse(pts, now);
+    sim = { pts, a };
+
+    // banner
+    const shown = a.started ? a.cur : 0;
+    const lvl = levelFor(shown);
+    const banner = $("banner");
+    banner.className = "banner " + tone(shown);
+    if (!a.started) {
+      banner.textContent = "Your first drink is at " + when(drinks.map((d) => d.time).sort((x, y) => x - y)[0]) + ". Nothing in your blood yet.";
+    } else if (a.cur <= 0.005) {
+      banner.textContent = "Estimated back to 0.0 ‰ already.";
+    } else {
+      banner.innerHTML = "";
+      const b = document.createElement("b");
+      b.textContent = "about " + fmt(a.cur) + " ‰, " + lvl.name + ". ";
+      banner.append(b, lvl.desc);
+    }
+
+    // stat cards
+    setStat("sNow", a.started ? fmt(a.cur) + " ‰" : "–", tone(shown), a.started ? "≈ " + (a.cur * BREATH_PER_MILLE).toFixed(2) + " mg/l breath" : "not started");
+    setStat("sPeak", fmt(a.peak.c) + " ‰", tone(a.peak.c), "at " + when(a.peak.t));
+    if (a.soberAt === null) {
+      setStat("sSober", "–", "ok", "no meaningful alcohol");
+    } else if (a.soberAt <= now) {
+      setStat("sSober", clock(a.soberAt), "ok", "already passed");
+    } else {
+      setStat("sSober", clock(a.soberAt), "ok", "in " + dur(a.soberAt - now));
+    }
+    setStat("sGrams", totalG.toFixed(0) + " g", "ok", (totalG / ANNOS_G).toFixed(1) + " standard · " + Math.round(totalG * KCAL_PER_G) + " kcal");
+
+    // danger alert
+    const worst = Math.max(a.peak.c, 0);
+    const danger = $("danger");
+    if (worst >= 2.5) {
+      danger.hidden = false;
+      danger.textContent = "The estimated peak of " + fmt(worst) + " ‰ is in a range that can be dangerous (alcohol poisoning). Do not keep drinking. If someone cannot be woken, is vomiting while drowsy, or is breathing slowly, call 112.";
+    } else danger.hidden = true;
+
+    // level table highlight
+    const rows = $("levels").querySelectorAll("tr");
+    const activeIdx = LEVELS.indexOf(levelFor(a.started ? a.cur : a.peak.c));
+    rows.forEach((tr, i) => tr.classList.toggle("on", i === activeIdx));
+    drawChart();
+  }
+
+  function setStat(id, value, t, sub) {
+    const v = $(id);
+    v.textContent = value;
+    v.className = "v " + t;
+    $(id + "Sub").textContent = sub;
+  }
+
+  function renderEmpty(validWeight) {
+    $("banner").className = "banner ok";
+    $("banner").textContent = validWeight ? "Add a drink to see your estimated curve." : "Enter a weight between 30 and 300 kg.";
+    $("danger").hidden = true;
+    ["sNow", "sPeak", "sSober", "sGrams"].forEach((id) => setStat(id, "–", "ok", "\u00a0"));
+    $("levels").querySelectorAll("tr").forEach((tr) => tr.classList.remove("on"));
+  }
+
+  // ---------- drink list ----------
+  function addDrink(name, cl, abv, time) {
+    if (!(cl > 0) || !(abv > 0)) return;
+    drinks.push({ id: nextId++, name, cl, abv, time: time ?? roundMin(Date.now()) });
+    renderList();
+    recalc();
+  }
+
+  function renderList() {
+    const ul = $("drinkList");
+    ul.innerHTML = "";
+    drinks.forEach((d) => {
+      const li = document.createElement("li");
+      const nm = document.createElement("div");
+      nm.className = "nm";
+      nm.textContent = d.name;
+      const sm = document.createElement("small");
+      sm.textContent = d.cl + " cl · " + d.abv + " % · " + (grams(d) / ANNOS_G).toFixed(1) + " standard";
+      nm.appendChild(sm);
+      const rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "rm";
+      rm.setAttribute("aria-label", "remove " + d.name);
+      rm.textContent = "×";
+      rm.addEventListener("click", () => {
+        drinks.splice(drinks.findIndex((x) => x.id === d.id), 1);
+        renderList();
+        recalc();
+      });
+      const time = document.createElement("input");
+      time.type = "datetime-local";
+      time.value = toInput(d.time);
+      time.setAttribute("aria-label", "time of " + d.name);
+      time.addEventListener("input", () => {
+        const ms = new Date(time.value).getTime();
+        if (!isNaN(ms)) { d.time = ms; recalc(); }
+      });
+      li.append(nm, rm, time);
+      ul.appendChild(li);
+    });
+    $("noDrinks").hidden = drinks.length > 0;
+    $("listtools").hidden = drinks.length === 0;
+  }
+
+  // ---------- chart ----------
+  function niceMax(v) { return Math.ceil(v / 0.25) * 0.25; }
+
+  function drawChart() {
+    const cv = $("chart");
+    const rect = cv.getBoundingClientRect();
+    const cssW = Math.round(rect.width) || 640, cssH = Math.round(rect.height) || 320;
+    const dpr = window.devicePixelRatio || 1;
+    if (cv.width !== Math.round(cssW * dpr) || cv.height !== Math.round(cssH * dpr)) {
+      cv.width = Math.round(cssW * dpr);
+      cv.height = Math.round(cssH * dpr);
+    }
+    const g = cv.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, cssW, cssH);
+    const mono = '12px ui-monospace, Consolas, "SF Mono", Menlo, monospace';
+
+    if (!sim) {
+      g.fillStyle = "#86a99a";
+      g.font = "14px system-ui, sans-serif";
+      g.textAlign = "center";
+      g.fillText("your curve will appear here", cssW / 2, cssH / 2);
+      return;
+    }
+    const { pts, a } = sim;
+    const padL = 44, padR = 12, padT = 16, padB = 34;
+    const pw = cssW - padL - padR, ph = cssH - padT - padB;
+    const t0 = pts[0].t, t1 = pts[pts.length - 1].t + 20 * MIN;
+    const yMax = niceMax(Math.max(0.7, a.peak.c * 1.18));
+    const X = (t) => padL + (t - t0) / (t1 - t0) * pw;
+    const Y = (c) => padT + ph - Math.min(c, yMax) / yMax * ph;
+
+    // danger bands
+    g.fillStyle = "rgba(255,176,46,0.06)";
+    g.fillRect(padL, Y(yMax), pw, Y(LIMIT) - Y(yMax));
+    if (yMax > AGGRAVATED) {
+      g.fillStyle = "rgba(255,82,82,0.07)";
+      g.fillRect(padL, Y(yMax), pw, Y(AGGRAVATED) - Y(yMax));
+    }
+
+    // y grid
+    const step = [0.1, 0.25, 0.5, 1].find((s) => yMax / s <= 6) || 1;
+    g.font = mono; g.textAlign = "right"; g.textBaseline = "middle";
+    for (let v = 0; v <= yMax + 1e-9; v += step) {
+      g.strokeStyle = "#1b3530"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(padL, Math.round(Y(v)) + 0.5); g.lineTo(padL + pw, Math.round(Y(v)) + 0.5); g.stroke();
+      g.fillStyle = "#86a99a";
+      g.fillText(v.toFixed(2), padL - 6, Y(v));
+    }
+
+    // x ticks
+    const hours = (t1 - t0) / HOUR;
+    const hs = hours <= 8 ? 1 : hours <= 16 ? 2 : 4;
+    g.textAlign = "center"; g.textBaseline = "top";
+    const first = new Date(t0); first.setMinutes(0, 0, 0);
+    for (let t = first.getTime() + HOUR; t < t1; t += HOUR) {
+      const d = new Date(t);
+      if (d.getHours() % hs !== 0) continue;
+      g.strokeStyle = "#1b3530";
+      g.beginPath(); g.moveTo(Math.round(X(t)) + 0.5, padT); g.lineTo(Math.round(X(t)) + 0.5, padT + ph); g.stroke();
+      g.fillStyle = "#86a99a";
+      g.fillText(pad(d.getHours()) + ":00", X(t), padT + ph + 8);
+      if (d.getHours() === 0) g.fillText(d.toLocaleDateString("en-GB", { weekday: "short" }), X(t), padT + ph + 21);
+    }
+
+    // reference lines
+    g.setLineDash([5, 4]); g.lineWidth = 1;
+    g.strokeStyle = "rgba(255,176,46,0.8)";
+    g.beginPath(); g.moveTo(padL, Y(LIMIT)); g.lineTo(padL + pw, Y(LIMIT)); g.stroke();
+    g.fillStyle = "#ffb02e"; g.textAlign = "left"; g.textBaseline = "bottom";
+    g.fillText("0.5 ‰ driving limit (Finland)", padL + 6, Y(LIMIT) - 3);
+    if (yMax > AGGRAVATED) {
+      g.strokeStyle = "rgba(255,82,82,0.8)";
+      g.beginPath(); g.moveTo(padL, Y(AGGRAVATED)); g.lineTo(padL + pw, Y(AGGRAVATED)); g.stroke();
+      g.fillStyle = "#ff5252";
+      g.fillText("1.2 ‰ aggravated", padL + 6, Y(AGGRAVATED) - 3);
+    }
+    g.setLineDash([]);
+
+    // curve (colour depends on the level, via a hard-stop gradient)
+    const pos = (v) => Math.min(1, Math.max(0, (yMax - v) / yMax));
+    const mk = (alpha) => {
+      const gr = g.createLinearGradient(0, padT, 0, padT + ph);
+      const col = (hex) => (alpha === 1 ? hex : hex + alpha);
+      gr.addColorStop(0, col("#ff5252")); gr.addColorStop(pos(AGGRAVATED), col("#ff5252"));
+      gr.addColorStop(pos(AGGRAVATED), col("#ffb02e")); gr.addColorStop(pos(LIMIT), col("#ffb02e"));
+      gr.addColorStop(pos(LIMIT), col("#3dff7a")); gr.addColorStop(1, col("#3dff7a"));
+      return gr;
+    };
+    g.beginPath();
+    pts.forEach((p, i) => (i ? g.lineTo(X(p.t), Y(p.c)) : g.moveTo(X(p.t), Y(p.c))));
+    g.lineTo(X(pts[pts.length - 1].t), Y(0)); g.lineTo(X(pts[0].t), Y(0)); g.closePath();
+    g.fillStyle = mk("2e"); g.fill();
+    g.beginPath();
+    pts.forEach((p, i) => (i ? g.lineTo(X(p.t), Y(p.c)) : g.moveTo(X(p.t), Y(p.c))));
+    g.strokeStyle = mk(1); g.lineWidth = 2.5; g.lineJoin = "round"; g.stroke();
+
+    // drink markers
+    g.fillStyle = "#86a99a";
+    drinks.forEach((d) => {
+      if (d.time < t0 || d.time > t1) return;
+      const x = X(d.time), y = padT + ph;
+      g.beginPath(); g.moveTo(x, y - 7); g.lineTo(x - 4, y); g.lineTo(x + 4, y); g.closePath(); g.fill();
+    });
+
+    // now marker
+    const now = Date.now();
+    if (now >= t0 && now <= t1) {
+      g.setLineDash([2, 3]); g.strokeStyle = "#dcf5e8"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(X(now), padT); g.lineTo(X(now), padT + ph); g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = "#dcf5e8"; g.textAlign = "center"; g.textBaseline = "top";
+      g.fillText("now", X(now), padT + 2);
+    }
+
+    // peak marker
+    if (a.peak.c > 0.005) {
+      const px = X(a.peak.t), py = Y(a.peak.c);
+      g.fillStyle = cssColor[tone(a.peak.c)];
+      g.beginPath(); g.arc(px, py, 4, 0, Math.PI * 2); g.fill();
+      g.font = "bold " + mono; g.textBaseline = "bottom";
+      g.textAlign = px > cssW - 90 ? "right" : px < padL + 50 ? "left" : "center";
+      g.fillText("peak " + fmt(a.peak.c) + " ‰", px, py - 8);
+      g.font = mono;
+    }
+
+    // hover read-out
+    if (hoverX !== null && hoverX >= padL && hoverX <= padL + pw) {
+      const t = t0 + (hoverX - padL) / pw * (t1 - t0);
+      const idx = Math.max(0, Math.min(pts.length - 1, Math.round((t - t0) / MIN)));
+      const p = pts[idx];
+      const hx = X(p.t), hy = Y(p.c);
+      g.strokeStyle = "rgba(220,245,232,0.5)"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(hx, padT); g.lineTo(hx, padT + ph); g.stroke();
+      g.fillStyle = "#dcf5e8";
+      g.beginPath(); g.arc(hx, hy, 4, 0, Math.PI * 2); g.fill();
+      const label = clock(p.t) + "   " + fmt(p.c) + " ‰";
+      g.font = "bold " + mono;
+      const w = g.measureText(label).width + 16;
+      const bx = hx + 10 + w > padL + pw ? hx - 10 - w : hx + 10;
+      const by = Math.max(padT + 2, Math.min(hy - 14, padT + ph - 28));
+      g.fillStyle = "#0a1210"; g.strokeStyle = "#3dff7a";
+      g.fillRect(bx, by, w, 24); g.strokeRect(bx + 0.5, by + 0.5, w - 1, 23);
+      g.fillStyle = "#dcf5e8"; g.textAlign = "left"; g.textBaseline = "middle";
+      g.fillText(label, bx + 8, by + 12.5);
+      g.font = mono;
+    }
+  }
+
+  // ---------- setup ----------
+  const presets = $("presets");
+  PRESETS.forEach((p) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.append(p.name + " ");
+    const s = document.createElement("small");
+    s.textContent = p.cl + " cl · " + p.abv + "%";
+    b.appendChild(s);
+    b.addEventListener("click", () => addDrink(p.name, p.cl, p.abv));
+    presets.appendChild(b);
+  });
+
+  $("cAdd").addEventListener("click", () => {
+    const cl = parseFloat($("cVol").value), abv = parseFloat($("cAbv").value);
+    if (cl > 0 && abv > 0) addDrink("Custom drink", cl, abv);
+  });
+  $("clearAll").addEventListener("click", () => { drinks.length = 0; renderList(); recalc(); });
+  ["weight", "stomach", "beta"].forEach((id) => $(id).addEventListener("input", recalc));
+  document.querySelectorAll('input[name="sex"]').forEach((el) => el.addEventListener("change", recalc));
+
+  const cv = $("chart");
+  const setHover = (e) => { hoverX = e.clientX - cv.getBoundingClientRect().left; drawChart(); };
+  cv.addEventListener("pointermove", setHover);
+  cv.addEventListener("pointerdown", setHover);
+  cv.addEventListener("pointerleave", () => { hoverX = null; drawChart(); });
+  addEventListener("resize", drawChart);
+
+  const levels = $("levels");
+  LEVELS.forEach((l) => {
+    const tr = document.createElement("tr");
+    const a = document.createElement("td"); a.textContent = l.range + " ‰";
+    const b = document.createElement("td"); b.textContent = l.desc;
+    tr.append(a, b);
+    levels.appendChild(tr);
+  });
+
+  renderList();
+  recalc();
+  setInterval(recalc, 30000);
+</script>
+</body>
+</html>
