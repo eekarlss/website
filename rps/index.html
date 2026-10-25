@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Rock paper scissors</title>
+<style>
+  :root {
+    --bg: #0a1210;
+    --panel: #101e1a;
+    --panel2: #0c1815;
+    --line: #21403a;
+    --ink: #dcf5e8;
+    --dim: #86a99a;
+    --accent: #3dff7a;
+    --amber: #ffb02e;
+    --red: #ff5252;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  h1 { font: 700 clamp(1.5rem, 4vw, 2.1rem)/1.2 var(--mono); margin: 0 0 1.25rem; }
+  h1 span { color: var(--accent); }
+  .layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; } }
+  .side { display: grid; gap: 1rem; min-width: 0; }
+
+  /* camera stage */
+  .stage {
+    position: relative;
+    width: 100%;
+    max-width: 760px;
+    aspect-ratio: 4 / 3;
+    background: #000;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .mirror { position: absolute; inset: 0; transform: scaleX(-1); }
+  .mirror video, .mirror canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .mirror video { opacity: 0.9; }
+  .live {
+    position: absolute; left: 0.6rem; top: 0.6rem;
+    background: rgba(10, 18, 16, 0.78); border: 1px solid var(--line); border-radius: 6px;
+    padding: 0.25rem 0.6rem; font: 0.85rem var(--mono); color: var(--dim);
+  }
+  .live.on { color: var(--accent); border-color: var(--accent); }
+  .center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 1rem; pointer-events: none;
+  }
+  .msg { font: 700 clamp(1.1rem, 3.4vw, 1.7rem)/1.3 var(--mono); text-shadow: 0 2px 10px #000, 0 0 3px #000; max-width: 26ch; }
+  .msg small { display: block; font: 400 0.8rem/1.4 system-ui, sans-serif; color: #cfe8dc; margin-top: 0.4rem; }
+  .beat { font: 800 clamp(2.4rem, 11vw, 5.5rem)/1 var(--mono); color: var(--accent); text-shadow: 0 3px 14px #000, 0 0 4px #000; animation: pop 0.3s ease-out; }
+  .beat.shoot { color: var(--amber); }
+  @keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .duel { display: flex; align-items: center; gap: clamp(0.8rem, 5vw, 2.5rem); animation: pop 0.3s ease-out; }
+  .duel .em { font-size: clamp(3.2rem, 14vw, 6.5rem); line-height: 1; filter: drop-shadow(0 3px 8px #000); }
+  .duel .nm { font: 0.85rem var(--mono); color: #dcf5e8; text-shadow: 0 1px 6px #000; }
+  .duel .vs { font: 0.9rem var(--mono); color: var(--dim); }
+  .verdict { margin-top: 0.8rem; font: 800 clamp(1.3rem, 5vw, 2.3rem)/1.2 var(--mono); text-shadow: 0 3px 12px #000; }
+  .verdict.win { color: var(--accent); } .verdict.lose { color: var(--red); }
+  .verdict.draw { color: var(--amber); } .verdict.missed { color: #cfe8dc; font-size: clamp(1rem, 3.2vw, 1.4rem); }
+  .gate {
+    position: absolute; inset: 0; background: rgba(6, 12, 10, 0.93);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8rem;
+    text-align: center; padding: 1.2rem;
+  }
+  .gate h2 { margin: 0; font: 700 clamp(1.1rem, 3.5vw, 1.5rem) var(--mono); }
+  .gate p { margin: 0; max-width: 40ch; color: var(--dim); font-size: 0.9rem; }
+  .gate p.err { color: var(--amber); }
+  .gate[hidden] { display: none; }
+
+  .holdbar { height: 6px; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; margin-top: 0.6rem; max-width: 760px; overflow: hidden; }
+  #holdFill { height: 100%; width: 0; background: var(--accent); }
+  .tip { color: var(--dim); font-size: 0.85rem; margin: 0.6rem 0 0; max-width: 760px; }
+
+  button {
+    font: inherit; cursor: pointer; color: var(--ink); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 6px; padding: 0.45rem 0.8rem;
+  }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button.primary { background: var(--accent); color: #04140a; border-color: var(--accent); font-weight: 700; padding: 0.6rem 1.2rem; }
+  button.ghost { color: var(--dim); }
+  select { font: inherit; width: 100%; background: var(--panel2); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 0.45rem 0.6rem; color-scheme: dark; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0.9rem 1rem; }
+  .card h2 { margin: 0 0 0.7rem; font: 600 0.9rem var(--mono); color: var(--accent); }
+  .score { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; gap: 0.5rem; }
+  .score .n { font: 800 2.2rem/1.1 var(--mono); }
+  .score .l { font-size: 0.8rem; color: var(--dim); }
+  .n.you { color: var(--accent); } .n.cpu { color: var(--red); } .n.dr { color: var(--amber); }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2rem 0.8rem; margin-top: 0.8rem; font-size: 0.85rem; color: var(--dim); }
+  .stats b { color: var(--ink); font-family: var(--mono); float: right; }
+  .hist { display: flex; flex-wrap: wrap; gap: 0.35rem; min-height: 2rem; }
+  .chip { border: 1px solid var(--line); border-radius: 6px; padding: 0.1rem 0.4rem; font-size: 0.95rem; background: var(--panel2); }
+  .chip.win { border-color: var(--accent); } .chip.lose { border-color: var(--red); } .chip.draw { border-color: var(--amber); }
+  .empty { color: var(--dim); font-size: 0.85rem; margin: 0; }
+  .field { margin-bottom: 0.7rem; }
+  .field label, .lbl { display: block; font-size: 0.8rem; color: var(--dim); margin-bottom: 0.25rem; }
+  .btnrow { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .btnrow button { flex: 1; font-size: 1.05rem; padding: 0.45rem 0.3rem; }
+  pre.dbg { margin: 0; font: 0.78rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { .beat, .duel { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>rock<span>.</span>paper<span>.</span>scissors</h1>
+
+  <div class="layout">
+    <div>
+      <div class="stage" id="stage">
+        <div class="mirror">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="overlay"></canvas>
+        </div>
+        <div class="live" id="live">no hand</div>
+        <div class="center" id="center"></div>
+        <div class="gate" id="gate">
+          <h2>play with your hand</h2>
+          <p id="gateMsg">Your camera finds your hand and reads rock, paper or scissors. The video stays in your browser and is never uploaded.</p>
+          <button class="primary" id="startCam" type="button">start camera</button>
+          <button class="ghost" id="noCam" type="button">play with buttons instead</button>
+        </div>
+      </div>
+      <div class="holdbar" aria-hidden="true"><div id="holdFill"></div></div>
+      <p class="tip">Sit in good light with your hand about 50 cm from the camera. On “shoot!”, throw ✊ rock, ✋ paper or ✌️ scissors and hold it for half a second.</p>
+    </div>
+
+    <div class="side">
+      <section class="card">
+        <h2>score</h2>
+        <div class="score">
+          <div><div class="n you" id="scYou">0</div><div class="l">you</div></div>
+          <div><div class="n dr" id="scDraw">0</div><div class="l">draws</div></div>
+          <div><div class="n cpu" id="scCpu">0</div><div class="l">computer</div></div>
+        </div>
+        <div class="stats">
+          <div>streak <b id="stStreak">0</b></div>
+          <div>best streak <b id="stBest">0</b></div>
+          <div>rounds <b id="stRounds">0</b></div>
+          <div>win rate <b id="stRate">–</b></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>history</h2>
+        <div class="hist" id="hist"></div>
+        <p class="empty" id="histEmpty">No rounds yet.</p>
+      </section>
+
+      <section class="card">
+        <h2>options</h2>
+        <div class="field">
+          <label for="mode">computer plays</label>
+          <select id="mode">
+            <option value="random">randomly</option>
+            <option value="learn">by learning your habits</option>
+          </select>
+        </div>
+        <div class="field">
+          <span class="lbl">no camera? throw with a click</span>
+          <div class="btnrow">
+            <button type="button" data-move="rock" aria-label="rock">✊</button>
+            <button type="button" data-move="paper" aria-label="paper">✋</button>
+            <button type="button" data-move="scissors" aria-label="scissors">✌️</button>
+          </div>
+        </div>
+        <div class="btnrow">
+          <button class="ghost" id="reset" type="button">reset score</button>
+          <button class="ghost" id="dbgBtn" type="button">debug</button>
+          <button class="ghost" id="stopCam" type="button" hidden>stop camera</button>
+        </div>
+      </section>
+
+      <section class="card" id="dbgCard" hidden>
+        <h2>debug</h2>
+        <pre class="dbg" id="dbg">no hand</pre>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------- config ----------
+  const MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32";
+  const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+  const BEAT_MS = 700;        // length of "rock", "paper", "scissors"
+  const SKIP_MS = 150;        // ignore the first moments after "shoot!" (hand still moving)
+  const CAPTURE_MS = 650;     // total window after "shoot!"
+  const RESULT_MS = 2800;
+  const HOLD_MS = 800;        // open palm hold needed to start a round
+  const MIN_VOTES = 4;
+  const EXT_RATIO = 1.1;      // fingertip/knuckle distance from wrist: above this the finger counts as extended
+  const BEST_KEY = "rps-best-streak-v1";
+
+  const MOVES = ["rock", "paper", "scissors"];
+  const EMOJI = { rock: "✊", paper: "✋", scissors: "✌️" };
+  const BEATS = { rock: "scissors", paper: "rock", scissors: "paper" };    // key beats value
+  const COUNTER = { rock: "paper", paper: "scissors", scissors: "rock" }; // key is beaten by value
+  const FINGER_JOINTS = { index: [6, 8], middle: [10, 12], ring: [14, 16], pinky: [18, 20] }; // [pip, tip]
+  const CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- state ----------
+  let phase = "idle";            // idle | countdown | capture | result
+  let phaseStart = 0, lastResultAt = -1e9, beatIdx = -1;
+  let palmSince = null;
+  let votes = [];
+  let cpuPick = null;
+  let cameraOn = false;
+  let stats = { you: 0, cpu: 0, draw: 0, streak: 0, best: 0 };
+  let log = [];                  // {player, cpu, outcome}
+  let playerHistory = [];        // player's moves, for the learning opponent
+  try { stats.best = parseInt(localStorage.getItem(BEST_KEY), 10) || 0; } catch (e) {}
+
+  // ---------- gesture recognition ----------
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+
+  // For each finger: how much farther the tip is from the wrist than the middle knuckle.
+  // Straight finger is about 1.35, curled finger about 0.6.
+  function ratios(w) {
+    const out = {};
+    for (const [name, [pip, tip]] of Object.entries(FINGER_JOINTS)) {
+      out[name] = dist(w[tip], w[0]) / Math.max(1e-6, dist(w[pip], w[0]));
+    }
+    return out;
+  }
+
+  function classify(w) {
+    const r = ratios(w);
+    const up = {};
+    for (const k in r) up[k] = r[k] > EXT_RATIO;
+    let gesture = null;
+    if (up.index && up.middle && up.ring) gesture = "paper";
+    else if (up.index && up.middle && !up.ring && !up.pinky) gesture = "scissors";
+    else if (!up.index && !up.middle && !up.ring) gesture = "rock";
+    return { gesture, ratios: r, up };
+  }
+
+  // ---------- computer opponent ----------
+  const rnd = (n) => Math.floor(Math.random() * n);
+
+  function predictNext() {
+    const prev = playerHistory[playerHistory.length - 1];
+    const counts = { rock: 0, paper: 0, scissors: 0 };
+    for (let i = 1; i < playerHistory.length; i++) if (playerHistory[i - 1] === prev) counts[playerHistory[i]]++;
+    if (counts.rock + counts.paper + counts.scissors < 2) {
+      for (const m of playerHistory) counts[m]++;
+    }
+    const max = Math.max(counts.rock, counts.paper, counts.scissors);
+    const top = MOVES.filter((m) => counts[m] === max);
+    return top[rnd(top.length)];
+  }
+
+  // The computer commits to its move before it sees your throw.
+  function cpuMove() {
+    if ($("mode").value === "learn" && playerHistory.length >= 4 && Math.random() < 0.8) {
+      return COUNTER[predictNext()];
+    }
+    return MOVES[rnd(3)];
+  }
+
+  // ---------- round flow ----------
+  function startRound(now) {
+    phase = "countdown";
+    phaseStart = now;
+    beatIdx = -1;
+    votes = [];
+    palmSince = null;
+    cpuPick = cpuMove();
+    setHold(0);
+  }
+
+  function tally() {
+    const useful = votes.filter((v) => v.t >= SKIP_MS).map((v) => v.g);
+    const counts = {};
+    for (const g of useful) counts[g] = (counts[g] || 0) + 1;
+    let best = null;
+    for (const g in counts) if (best === null || counts[g] > counts[best]) best = g;
+    if (best === null || useful.length < MIN_VOTES || counts[best] / useful.length < 0.5) return null;
+    return best;
+  }
+
+  function resolve(player, cpu, now) {
+    const outcome = player === cpu ? "draw" : BEATS[player] === cpu ? "win" : "lose";
+    stats[outcome === "win" ? "you" : outcome === "lose" ? "cpu" : "draw"]++;
+    if (outcome === "win") { stats.streak++; if (stats.streak > stats.best) { stats.best = stats.streak; try { localStorage.setItem(BEST_KEY, String(stats.best)); } catch (e) {} } }
+    else stats.streak = 0;
+    log.push({ player, cpu, outcome });
+    playerHistory.push(player);
+    phase = "result";
+    phaseStart = now;
+    lastResultAt = now;
+    showResult({ player, cpu, outcome });
+    renderScore();
+    return outcome;
+  }
+
+  function finishRound(now) {
+    const player = tally();
+    if (!player) {
+      phase = "result";
+      phaseStart = now;
+      lastResultAt = now;
+      showResult({ outcome: "missed" });
+      return "missed";
+    }
+    return resolve(player, cpuPick, now);
+  }
+
+  function quickPlay(move) {
+    if (phase === "countdown" || phase === "capture") return;
+    resolve(move, cpuMove(), performance.now());
+  }
+
+  function tick(now, world, fresh) {
+    const cls = world ? classify(world) : null;
+    if (fresh) updateLive(cls, world);
+
+    if (phase === "idle") {
+      if (cls && cls.gesture === "paper" && now - lastResultAt > 1200) {
+        if (palmSince === null) palmSince = now;
+        const f = (now - palmSince) / HOLD_MS;
+        setHold(f);
+        if (f >= 1) startRound(now);
+      } else {
+        palmSince = null;
+        setHold(0);
+      }
+    } else if (phase === "countdown") {
+      const e = now - phaseStart;
+      const idx = Math.min(2, Math.floor(e / BEAT_MS));
+      if (idx !== beatIdx) { beatIdx = idx; showBeat(["rock", "paper", "scissors"][idx]); }
+      if (e >= 3 * BEAT_MS) {
+        phase = "capture";
+        phaseStart = phaseStart + 3 * BEAT_MS;
+        showBeat("shoot!", true);
+      }
+    } else if (phase === "capture") {
+      const e = now - phaseStart;
+      if (fresh && cls && cls.gesture) votes.push({ g: cls.gesture, t: e });
+      if (e >= CAPTURE_MS) finishRound(now);
+    } else if (phase === "result") {
+      if (now - phaseStart >= RESULT_MS) { phase = "idle"; showIdle(); }
+    }
+  }
+
+  // ---------- UI ----------
+  function showIdle() {
+    $("center").innerHTML = cameraOn
+      ? '<div class="msg">hold up an open palm to play<small>or press space</small></div>'
+      : '<div class="msg">press space or use the buttons to play</div>';
+  }
+  function showBeat(text, shoot) {
+    $("center").innerHTML = '<div class="beat' + (shoot ? " shoot" : "") + '">' + text + "</div>";
+  }
+  function showResult(info) {
+    const c = $("center");
+    if (info.outcome === "missed") {
+      c.innerHTML = '<div class="verdict missed">couldn’t see your throw, that round doesn’t count</div>';
+      return;
+    }
+    const text = { win: "you win!", lose: "computer wins", draw: "draw" }[info.outcome];
+    c.innerHTML =
+      '<div class="duel"><div><div class="em">' + EMOJI[info.player] + '</div><div class="nm">you</div></div>' +
+      '<div class="vs">vs</div>' +
+      '<div><div class="em">' + EMOJI[info.cpu] + '</div><div class="nm">computer</div></div></div>' +
+      '<div class="verdict ' + info.outcome + '">' + text + "</div>";
+  }
+  function setHold(f) { $("holdFill").style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + "%"; }
+
+  function renderScore() {
+    $("scYou").textContent = stats.you;
+    $("scDraw").textContent = stats.draw;
+    $("scCpu").textContent = stats.cpu;
+    const total = stats.you + stats.cpu + stats.draw;
+    $("stStreak").textContent = stats.streak;
+    $("stBest").textContent = stats.best;
+    $("stRounds").textContent = total;
+    $("stRate").textContent = total ? Math.round((stats.you / total) * 100) + "%" : "–";
+    const h = $("hist");
+    h.innerHTML = "";
+    log.slice(-12).forEach((r) => {
+      const s = document.createElement("span");
+      s.className = "chip " + r.outcome;
+      s.textContent = EMOJI[r.player] + " " + EMOJI[r.cpu];
+      s.title = r.player + " vs " + r.cpu + ": " + r.outcome;
+      h.appendChild(s);
+    });
+    $("histEmpty").hidden = log.length > 0;
+  }
+
+  let frames = 0, fpsAt = 0, fps = 0;
+  function updateLive(cls, world) {
+    const el = $("live");
+    if (!world) { el.textContent = "no hand"; el.classList.remove("on"); }
+    else if (cls.gesture) { el.textContent = EMOJI[cls.gesture] + " " + cls.gesture; el.classList.add("on"); }
+    else { el.textContent = "hand seen, unclear"; el.classList.remove("on"); }
+    if (!$("dbgCard").hidden) {
+      const now = performance.now();
+      frames++;
+      if (now - fpsAt > 1000) { fps = frames; frames = 0; fpsAt = now; }
+      $("dbg").textContent = world
+        ? Object.entries(cls.ratios).map(([k, v]) => k.padEnd(7) + v.toFixed(2) + (v > EXT_RATIO ? "  up" : "  curled")).join("\n") +
+          "\n\ngesture " + (cls.gesture || "none") + "\nthreshold " + EXT_RATIO + "\nfps " + fps
+        : "no hand\nfps " + fps;
+    }
+  }
+
+  // ---------- camera + hand tracking ----------
+  const video = $("video"), overlay = $("overlay");
+  let stream = null, landmarker = null, lastVT = -1, lastHand = null;
+
+  function gateMessage(text, isErr) {
+    const p = $("gateMsg");
+    p.textContent = text;
+    p.className = isErr ? "err" : "";
+  }
+  function cameraError(e) {
+    if (!navigator.mediaDevices) return "This browser only allows camera access on secure (https) pages.";
+    switch (e && e.name) {
+      case "NotAllowedError": case "PermissionDeniedError":
+        return "Camera permission was denied. Allow the camera for this site in the address bar, then press start again.";
+      case "NotFoundError": case "DevicesNotFoundError": return "No camera was found on this device.";
+      case "NotReadableError": case "TrackStartError": return "The camera is busy. Close other apps using it and try again.";
+      default: return "Couldn’t start the camera (" + ((e && e.name) || "unknown error") + ").";
+    }
+  }
+
+  async function createLandmarker(vision, fileset) {
+    const make = (delegate) => vision.HandLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: MODEL_URL, delegate },
+      runningMode: "VIDEO",
+      numHands: 1,
+      minHandDetectionConfidence: 0.5,
+      minHandPresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
+    try { return await make("GPU"); } catch (e) { return await make("CPU"); }
+  }
+
+  async function startCamera() {
+    $("startCam").disabled = true;
+    gateMessage("Starting camera…");
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("nomedia");
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 960 }, height: { ideal: 720 } }, audio: false });
+    } catch (e) {
+      gateMessage(cameraError(e), true);
+      $("startCam").disabled = false;
+      return;
+    }
+    video.srcObject = stream;
+    try { await video.play(); } catch (e) {}
+    await new Promise((res) => (video.readyState >= 1 ? res() : video.addEventListener("loadedmetadata", res, { once: true })));
+    overlay.width = video.videoWidth || 640;
+    overlay.height = video.videoHeight || 480;
+    $("stage").style.aspectRatio = overlay.width + " / " + overlay.height;
+
+    gateMessage("Loading the hand tracker (about 8 MB the first time)…");
+    try {
+      const vision = await import(MP_BASE + "/vision_bundle.mjs");
+      const fileset = await vision.FilesetResolver.forVisionTasks(MP_BASE + "/wasm");
+      landmarker = await createLandmarker(vision, fileset);
+    } catch (e) {
+      stopCamera();
+      gateMessage("Couldn’t load the hand tracker (check your connection). You can still play with the buttons.", true);
+      return;
+    }
+    cameraOn = true;
+    $("gate").hidden = true;
+    $("stopCam").hidden = false;
+    lastVT = -1;
+    if (phase === "idle") showIdle();
+  }
+
+  function stopCamera() {
+    cameraOn = false;
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    stream = null;
+    video.srcObject = null;
+    if (landmarker && landmarker.close) { try { landmarker.close(); } catch (e) {} }
+    landmarker = null;
+    lastHand = null;
+    drawHand(null);
+    $("startCam").disabled = false;
+    $("stopCam").hidden = true;
+    $("live").textContent = "no hand";
+    $("live").classList.remove("on");
+    $("gate").hidden = false;
+    gateMessage("Camera is off. Start it again whenever you like.");
+  }
+
+  function drawHand(norm) {
+    const g = overlay.getContext("2d");
+    g.clearRect(0, 0, overlay.width, overlay.height);
+    if (!norm) return;
+    const W = overlay.width, H = overlay.height;
+    g.lineWidth = Math.max(2, W / 200);
+    g.strokeStyle = "rgba(61,255,122,0.9)";
+    g.beginPath();
+    for (const [a, b] of CONNECTIONS) { g.moveTo(norm[a].x * W, norm[a].y * H); g.lineTo(norm[b].x * W, norm[b].y * H); }
+    g.stroke();
+    g.fillStyle = "#dcf5e8";
+    for (const p of norm) { g.beginPath(); g.arc(p.x * W, p.y * H, Math.max(2.5, W / 190), 0, Math.PI * 2); g.fill(); }
+  }
+
+  function loop(now) {
+    let fresh = false;
+    if (landmarker && video.readyState >= 2 && video.currentTime !== lastVT) {
+      lastVT = video.currentTime;
+      try {
+        const res = landmarker.detectForVideo(video, now);
+        lastHand = res.landmarks && res.landmarks.length ? { norm: res.landmarks[0], world: res.worldLandmarks[0] } : null;
+      } catch (e) { lastHand = null; }
+      drawHand(lastHand && lastHand.norm);
+      fresh = true;
+    }
+    tick(now, lastHand ? lastHand.world : null, fresh);
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- wiring ----------
+  $("startCam").addEventListener("click", startCamera);
+  $("stopCam").addEventListener("click", stopCamera);
+  $("noCam").addEventListener("click", () => { $("gate").hidden = true; showIdle(); });
+  document.querySelectorAll("[data-move]").forEach((b) => b.addEventListener("click", () => quickPlay(b.dataset.move)));
+  $("reset").addEventListener("click", () => {
+    stats = { you: 0, cpu: 0, draw: 0, streak: 0, best: stats.best };
+    log = []; playerHistory = [];
+    renderScore();
+  });
+  $("dbgBtn").addEventListener("click", () => { $("dbgCard").hidden = !$("dbgCard").hidden; });
+  addEventListener("keydown", (e) => {
+    if (e.code === "Space" || e.code === "Enter") {
+      if (document.activeElement && document.activeElement.tagName === "BUTTON") return;
+      e.preventDefault();
+      if (phase === "idle" && $("gate").hidden) startRound(performance.now());
+    }
+  });
+
+  renderScore();
+  requestAnimationFrame(loop);
+</script>
+</body>
+</html>
